@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+*.pgn
+*.pdf
+download_chess_games.py
