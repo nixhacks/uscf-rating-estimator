@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- Author: Sudhakar Gandhi -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>USCF Rating Estimator</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 480px;
+    margin: 40px auto;
+    padding: 0 16px;
+    color: #222;
+  }
+  h1 { font-size: 1.4em; }
+  label { display: block; margin-top: 14px; font-weight: 600; }
+  input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+  }
+  button {
+    margin-top: 20px;
+    padding: 10px 16px;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  #results {
+    margin-top: 24px;
+    padding: 14px;
+    background: #f4f4f4;
+    border-radius: 6px;
+    display: none;
+  }
+  #results p { margin: 6px 0; font-size: 1.1em; }
+  #error { color: #b00020; margin-top: 10px; }
+  #lookupStatus { font-size: 0.85em; margin-top: 4px; color: #444; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+<h1>USCF Rating Estimator</h1>
+
+<label for="opponents">Enter opponents rating (comma separated)</label>
+<input id="opponents" type="text" placeholder="e.g. 2000, 2100, 2050">
+
+<label for="score">Enter Total Score</label>
+<input id="score" type="number" step="0.5" placeholder="e.g. 2">
+
+<label for="rating">Enter Current Rating</label>
+<input id="rating" type="number" placeholder="e.g. 2050">
+
+<label for="priorGames">Total prior rated games (optional, leave blank if established)</label>
+<input id="priorGames" type="number" placeholder="e.g. 10">
+
+<label for="uscfId">USCF ID (optional, auto-fills prior rated games)</label>
+<input id="uscfId" type="text" placeholder="e.g. 32434178">
+<small>Requires the local lookup proxy running: <code>python3 app/uscf-lookup-server.py</code></small>
+<div id="lookupStatus"></div>
+
+<button id="calc">Calculate</button>
+
+<div id="error"></div>
+
+<div id="results">
+  <p>Performance Rating: <strong id="perfRating"></strong></p>
+  <p>Estimated New rating: <strong id="newRating"></strong></p>
+</div>
+
+<p>
+  <small>
+    References:
+    <a href="https://www.glicko.net/ratings/approx.pdf" target="_blank" rel="noopener">glicko.net/ratings/approx.pdf</a>,
+    <a href="https://new.uschess.org/sites/default/files/media/documents/the-us-chess-rating-system-revised-september-2020.pdf" target="_blank" rel="noopener">US Chess Rating System (2020)</a>
+  </small>
+</p>
+
+<script>
+function expectedScore(rating, opponentRatings) {
+  return opponentRatings.reduce(
+    (sum, ri) => sum + 1 / (1 + Math.pow(10, (ri - rating) / 400)),
+    0
+  );
+}
+
+function performanceRating(opponentRatings, totalScore) {
+  const n = opponentRatings.length;
+  if (totalScore <= 0) return Math.min(...opponentRatings) - 400;
+  if (totalScore >= n) return Math.max(...opponentRatings) + 400;
+
+  let lo = -2000, hi = 5000;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (expectedScore(mid, opponentRatings) < totalScore) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function effectiveGames(rating, priorGames) {
+  const nStar = rating >= 2355 ? 50 : 50 / Math.sqrt(0.662 + 0.00000739 * Math.pow(2569 - rating, 2));
+  if (priorGames == null) return nStar;
+  return Math.min(priorGames, nStar);
+}
+
+const BONUS_MULTIPLIER = 14; // B, effective May 1, 2017 per the US Chess rating system document
+
+function newRating(currentRating, opponentRatings, totalScore, priorGames) {
+  const n = effectiveGames(currentRating, priorGames);
+  const m = opponentRatings.length;
+  const k = 800 / (n + m);
+  const we = expectedScore(currentRating, opponentRatings);
+  const baseChange = k * (totalScore - we);
+
+  // Bonus for over-performance, only defined for events of 3+ games (US Chess Section 4.2)
+  let bonus = 0;
+  if (m >= 3) {
+    const mPrime = Math.max(m, 4);
+    bonus = Math.max(0, baseChange - BONUS_MULTIPLIER * Math.sqrt(mPrime));
+  }
+
+  return currentRating + baseChange + bonus;
+}
+
+document.getElementById('calc').addEventListener('click', async () => {
+  const errorEl = document.getElementById('error');
+  const resultsEl = document.getElementById('results');
+  const lookupStatusEl = document.getElementById('lookupStatus');
+  errorEl.textContent = '';
+  resultsEl.style.display = 'none';
+
+  const opponentRatings = document.getElementById('opponents').value
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length)
+    .map(Number);
+
+  const totalScore = parseFloat(document.getElementById('score').value);
+  const currentRating = parseFloat(document.getElementById('rating').value);
+  const priorGamesRaw = document.getElementById('priorGames').value.trim();
+  const uscfId = document.getElementById('uscfId').value.trim();
+  let priorGames = priorGamesRaw ? parseFloat(priorGamesRaw) : null;
+
+  if (uscfId) {
+    lookupStatusEl.textContent = 'Looking up USCF ID...';
+    try {
+      const resp = await fetch(`http://localhost:8765/lookup?id=${encodeURIComponent(uscfId)}`);
+      const data = await resp.json();
+      if (resp.ok && data.established) {
+        priorGames = null;
+        lookupStatusEl.textContent = `USCF ID ${uscfId} is an established player; using uncapped effective games.`;
+      } else if (resp.ok && typeof data.games === 'number') {
+        priorGames = data.games;
+        lookupStatusEl.textContent = `Found ${data.games} prior rated games for USCF ID ${uscfId}.`;
+      } else {
+        lookupStatusEl.textContent = `Lookup failed (${data.error || resp.status}); using manual value if provided.`;
+      }
+    } catch (e) {
+      lookupStatusEl.textContent = 'Lookup proxy not reachable (is uscf-lookup-server.py running?); using manual value if provided.';
+    }
+  } else {
+    lookupStatusEl.textContent = '';
+  }
+
+  if (!opponentRatings.length || opponentRatings.some(isNaN)) {
+    errorEl.textContent = 'Error: please enter valid opponent ratings.';
+    return;
+  }
+  if (isNaN(totalScore) || totalScore < 0 || totalScore > opponentRatings.length) {
+    errorEl.textContent = `Error: Total Score must be between 0 and ${opponentRatings.length}.`;
+    return;
+  }
+  if (isNaN(currentRating)) {
+    errorEl.textContent = 'Error: please enter a valid current rating.';
+    return;
+  }
+
+  const perf = performanceRating(opponentRatings, totalScore);
+  const nr = newRating(currentRating, opponentRatings, totalScore, priorGames);
+
+  document.getElementById('perfRating').textContent = Math.round(perf);
+  document.getElementById('newRating').textContent = Math.round(nr);
+  resultsEl.style.display = 'block';
+});
+</script>
+</body>
+</html>

@@ -39,6 +39,12 @@ python3 app/uscf-lookup-server.py
 
 and leave it running, then use the "USCF ID" field on the page.
 
+### GitHub Pages
+
+This repo includes a workflow at `.github/workflows/page.yml` that deploys the `web/` folder to GitHub Pages when you push to `main`.
+
+Important: GitHub Pages is static hosting, so the USCF ID auto-lookup will not work there because it depends on the local proxy server (`app/uscf-lookup-server.py`).
+
 ## Formulas
 
 Implements the US Chess rating system's standard formula, including the K-factor based on "effective number of games" and the bonus-point rule for over-performance:
