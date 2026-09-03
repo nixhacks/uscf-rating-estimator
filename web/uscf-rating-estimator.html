@@ -3,45 +3,128 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>USCF Rating Estimator</title>
 <style>
-  body {
-    font-family: system-ui, sans-serif;
-    max-width: 480px;
-    margin: 40px auto;
-    padding: 0 16px;
-    color: #222;
+  :root {
+    --felt: #1F3D2B;
+    --felt-dark: #16301F;
+    --ivory: #F2ECDD;
+    --paper: #FAF7F0;
+    --walnut: #8B5E34;
+    --walnut-dark: #6E4826;
+    --ink: #2A2620;
+    --ink-soft: #5B5548;
+    --line: #D8CFB8;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, Menlo, monospace;
   }
-  h1 { font-size: 1.4em; }
-  label { display: block; margin-top: 14px; font-weight: 600; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { max-width: 680px; margin: 0 auto; padding: 0 16px 60px; }
+  header.top {
+    position: relative;
+    overflow: hidden;
+    margin: 0 -16px 22px;
+    padding: 24px 20px 20px;
+    background: var(--felt);
+    color: var(--ivory);
+  }
+  header.top::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(90deg, #16301F 0 32px, transparent 32px 64px),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 32px, transparent 32px 64px);
+    opacity: .08;
+    pointer-events: none;
+  }
+  h1 { position: relative; margin: 0 0 4px; color: var(--ivory); font-size: 27px; }
+  .sub { position: relative; color: #CFE0D3; font-size: 14px; }
+  h2 { margin: 0 0 16px; color: var(--felt-dark); font-size: 19px; }
+  .card {
+    margin-bottom: 18px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+  label { display: block; margin-top: 14px; color: var(--ink-soft); font-family: var(--mono); font-size: 12px; font-weight: 600; }
   input {
     width: 100%;
-    padding: 8px;
+    padding: 9px 10px;
     margin-top: 4px;
-    box-sizing: border-box;
-    font-size: 1em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
   }
+  input:focus { outline: 2px solid var(--walnut); outline-offset: 0; }
   button {
+    padding: 10px 18px;
     margin-top: 20px;
-    padding: 10px 16px;
-    font-size: 1em;
+    background: var(--walnut);
+    border: 1px solid var(--walnut);
+    border-radius: 2px;
+    color: #fff;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
   }
+  button:hover { background: var(--walnut-dark); }
+  button:focus { outline: 2px solid var(--walnut); outline-offset: 2px; }
+  .note {
+    margin: 16px 0 0;
+    padding: 11px 12px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
   #results {
-    margin-top: 24px;
-    padding: 14px;
-    background: #f4f4f4;
-    border-radius: 6px;
+    margin-top: 18px;
+    padding: 16px;
+    background: #EDF4EE;
+    border: 1px solid #B9D5C0;
+    border-radius: 3px;
     display: none;
   }
   #results p { margin: 6px 0; font-size: 1.1em; }
-  #error { color: #b00020; margin-top: 10px; }
-  #lookupStatus { font-size: 0.85em; margin-top: 4px; color: #444; }
-  small { color: #666; }
+  #results strong { color: var(--felt-dark); font-family: var(--mono); }
+  #error { margin-top: 12px; color: #9C3B2A; font-size: 14px; }
+  #lookupStatus { margin-top: 6px; color: var(--ink-soft); font-size: 13px; }
+  small { color: var(--ink-soft); }
+  a { color: var(--walnut-dark); }
+  footer { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; text-align: center; }
+  code { font-family: var(--mono); font-size: .92em; }
+  @media (max-width: 640px) {
+    header.top { padding: 18px 14px 16px; }
+    .card { padding: 14px; }
+  }
 </style>
 </head>
 <body>
-<h1>USCF Rating Estimator</h1>
+<div id="app">
+<header class="top">
+  <h1>USCF Rating Estimator</h1>
+  <div class="sub">Estimate performance and post-event rating from your tournament results</div>
+</header>
+
+<main class="card">
+<h2>Enter your tournament results</h2>
 
 <label for="opponents">Enter opponents rating (comma separated)</label>
 <input id="opponents" type="text" placeholder="e.g. 2000, 2100, 2050">
@@ -68,7 +151,9 @@
   <p>Performance Rating: <strong id="perfRating"></strong></p>
   <p>Estimated New rating: <strong id="newRating"></strong></p>
 </div>
+</main>
 
+<footer>
 <p>
   <small>
     References:
@@ -76,6 +161,8 @@
     <a href="https://new.uschess.org/sites/default/files/media/documents/the-us-chess-rating-system-revised-september-2020.pdf" target="_blank" rel="noopener">US Chess Rating System (2020)</a>
   </small>
 </p>
+</footer>
+</div>
 
 <script>
 function expectedScore(rating, opponentRatings) {
